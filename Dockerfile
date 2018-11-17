@@ -1,29 +1,35 @@
-FROM ubuntu:16.04
+FROM alpine:3.8
 MAINTAINER Santiago Herrera Cardona <santiagohecar@gmail.com>
 
-# install dependencies
-RUN apt-get update \
- && apt-get -y install build-essential curl autoconf libxml2-dev libssl-dev \
-                       libbz2-dev libpng-dev libc-client-dev libkrb5-dev libmcrypt-dev \
-                       pkg-config libreadline-dev libmysqlclient-dev libtool autoconf nginx libgd-dev \
-                       wget net-tools
-
-# install openssl
-RUN cd /tmp \
- && wget https://www.openssl.org/source/old/0.9.x/openssl-0.9.8zh.tar.gz \
- && tar -zxvf openssl-0.9.8zh.tar.gz \
- && cd openssl-0.9.8zh \
- && ./config --prefix=/usr/local --openssldir=/usr/local/openssl-0.9.8 \
- && make \
- && make install
-
-# install libcurl
-RUN cd /usr/local/include \
- && ln -s /usr/include/x86_64-linux-gnu/curl curl \
- && apt-get install -y libcurl4-gnutls-dev
-
-# install php
-RUN cd /usr/local/src/ \
+RUN echo http://dl-cdn.alpinelinux.org/alpine/v3.4/main >> /etc/apk/repositories \
+ && apk update --no-cache \
+ ## install dependencies =========================
+ && apk add --no-cache --virtual .build-deps \
+    openssl=1.0.2n-r0 \
+    openssl-dev=1.0.2n-r0 \
+    curl \
+    g++ \
+    libxml2-dev \
+    bzip2-dev \
+    curl-dev \
+    libpng-dev \
+    freetype-dev \
+    gettext-dev \
+    libmcrypt-dev \
+    readline-dev \
+    imap-dev \
+    krb5-dev \
+    mariadb-dev \
+    make \
+    autoconf \
+    file \
+    libc-dev \
+    pkgconf \
+    re2c \
+    gawk \
+ ## install php ==================================
+ && addgroup -g 82 -S www-data && adduser -u 82 -D -S -G www-data www-data \
+ && cd /tmp \
  && export PHP_VERSION=5.3.29 \
  && curl -SL "http://php.net/get/php-$PHP_VERSION.tar.gz/from/this/mirror" -o php-$PHP_VERSION.tar.gz \
  && tar -xzvf php-$PHP_VERSION.tar.gz \
@@ -66,23 +72,19 @@ RUN cd /usr/local/src/ \
   --enable-fpm \
   --with-fpm-user=www-data \
   --with-fpm-group=www-data \
- && make \
- && make install \
- && mkdir -p /etc/php/conf.d
-
-# instasll timezonedb extension
-RUN pecl install timezonedb \
- && echo "extension=timezonedb.so" >> /etc/php/php.ini
-
-# install ioncube extension
-RUN cd /tmp \
+ && make && make install && make clean \
+ && mkdir -p /etc/php/conf.d/ \
+ ## install timezonedb extension =================
+ && pecl install timezonedb \
+ ## install ioncube extension ===================
+ && cd /tmp \
  && wget http://downloads3.ioncube.com/loader_downloads/ioncube_loaders_lin_x86-64.tar.gz \
  && tar xvfz ioncube_loaders_lin_x86-64.tar.gz \
  && cd ioncube \
- && cp ioncube_loader_lin_5.3.so /usr/local/lib/php/extensions/no-debug-non-zts-20090626/
-
-# install xcache
-RUN cd /tmp \
+ && mkdir -p /usr/local/lib/php/extensions/no-debug-non-zts-20090626/ \
+ && cp ioncube_loader_lin_5.3.so /usr/local/lib/php/extensions/no-debug-non-zts-20090626/ \
+ ## install xcache ===============================
+ && cd /tmp \
  && export XCACHE_VER=3.1.0 \
  && wget http://xcache.lighttpd.net/pub/Releases/$XCACHE_VER/xcache-$XCACHE_VER.tar.gz \
  && tar xzvf xcache-$XCACHE_VER.tar.gz \
@@ -91,11 +93,19 @@ RUN cd /tmp \
  && ./configure --enable-xcache \
  && make \
  && make install \
- && echo "extension=xcache.so" >> /etc/php/php.ini
+ ## clean ========================================
+ && runDeps="$( \
+		scanelf --needed --nobanner --recursive /usr/local \
+			| awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }' \
+			| sort -u \
+			| xargs -r apk info --installed \
+			| sort -u \
+	)" \
+ && apk add --no-cache --virtual .rundeps $runDeps \
+ && rm -rf /tmp/* && apk del --no-cache .build-deps
 
 COPY configs/php /etc/php
-
-RUN ln -s /etc/php/php-fpm.conf /usr/local/etc/php-fpm.conf
+COPY configs/php/php-fpm.conf /usr/local/etc/
 
 EXPOSE 9000
 CMD ["php-fpm"]
