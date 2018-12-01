@@ -1,35 +1,46 @@
-FROM alpine:3.8
+FROM debian:8-slim
 MAINTAINER Santiago Herrera Cardona <santiagohecar@gmail.com>
 
-RUN echo http://dl-cdn.alpinelinux.org/alpine/v3.4/main >> /etc/apk/repositories \
- && apk update --no-cache \
- ## install dependencies =========================
- && apk add --no-cache --virtual .build-deps \
-    openssl=1.0.2n-r0 \
-    openssl-dev=1.0.2n-r0 \
+RUN set -ex; \
+ apt-get update; \
+ # install build dependencies
+ apt-get install -y \
     curl \
     g++ \
-    libxml2-dev \
-    bzip2-dev \
-    curl-dev \
-    libpng-dev \
-    freetype-dev \
-    gettext-dev \
-    libmcrypt-dev \
-    readline-dev \
-    imap-dev \
-    krb5-dev \
-    mariadb-dev \
+    wget \
     make \
     autoconf \
-    file \
-    libc-dev \
-    pkgconf \
-    re2c \
-    gawk \
- ## install php ==================================
- && addgroup -g 82 -S www-data && adduser -u 82 -D -S -G www-data www-data \
- && cd /tmp \
+    ca-certificates \
+    --no-install-recommends; \
+ savedAptMark="$(apt-mark showmanual)"; \
+ # install runtime dependencies
+ apt-get install -y \
+    libxml2-dev \
+    zlib1g-dev \
+    libbz2-dev \
+    libpng-dev \
+    libfreetype6-dev \
+    libc-client-dev \
+    libkrb5-dev \
+    libmcrypt-dev \
+    libmysqlclient-dev \
+    libreadline-dev \
+    --no-install-recommends; \
+ # install openssl
+ cd /tmp; \
+ wget https://www.openssl.org/source/old/0.9.x/openssl-0.9.8zh.tar.gz; \
+ tar -zxvf openssl-0.9.8zh.tar.gz; \
+ cd openssl-0.9.8zh; \
+ ./config; \
+ make && make install; \
+ # install libcurl
+ ln -s /usr/include/x86_64-linux-gnu/curl /usr/local/include/curl; \
+ apt-get install -y libcurl4-gnutls-dev --no-install-recommends; \
+ # fix for freetype
+ mkdir /usr/include/freetype2/freetype; \
+ ln -s /usr/include/freetype2/freetype.h /usr/include/freetype2/freetype/freetype.h; \
+ # install php
+ cd /tmp \
  && export PHP_VERSION=5.3.29 \
  && curl -SL "http://php.net/get/php-$PHP_VERSION.tar.gz/from/this/mirror" -o php-$PHP_VERSION.tar.gz \
  && tar -xzvf php-$PHP_VERSION.tar.gz \
@@ -73,18 +84,18 @@ RUN echo http://dl-cdn.alpinelinux.org/alpine/v3.4/main >> /etc/apk/repositories
   --with-fpm-user=www-data \
   --with-fpm-group=www-data \
  && make && make install && make clean \
- && mkdir -p /etc/php/conf.d/ \
- ## install timezonedb extension =================
- && pecl install timezonedb \
- ## install ioncube extension ===================
- && cd /tmp \
+ && mkdir -p /etc/php/conf.d/; \
+ # install timezonedb extension
+ pecl install timezonedb; \
+ # install ioncube extension
+ cd /tmp \
  && wget http://downloads3.ioncube.com/loader_downloads/ioncube_loaders_lin_x86-64.tar.gz \
  && tar xvfz ioncube_loaders_lin_x86-64.tar.gz \
  && cd ioncube \
  && mkdir -p /usr/local/lib/php/extensions/no-debug-non-zts-20090626/ \
- && cp ioncube_loader_lin_5.3.so /usr/local/lib/php/extensions/no-debug-non-zts-20090626/ \
- ## install xcache ===============================
- && cd /tmp \
+ && cp ioncube_loader_lin_5.3.so /usr/local/lib/php/extensions/no-debug-non-zts-20090626/; \
+ #install xcache
+ cd /tmp \
  && export XCACHE_VER=3.1.0 \
  && wget http://xcache.lighttpd.net/pub/Releases/$XCACHE_VER/xcache-$XCACHE_VER.tar.gz \
  && tar xzvf xcache-$XCACHE_VER.tar.gz \
@@ -92,17 +103,21 @@ RUN echo http://dl-cdn.alpinelinux.org/alpine/v3.4/main >> /etc/apk/repositories
  && phpize \
  && ./configure --enable-xcache \
  && make \
- && make install \
- ## clean ========================================
- && runDeps="$( \
-		scanelf --needed --nobanner --recursive /usr/local \
-			| awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }' \
-			| sort -u \
-			| xargs -r apk info --installed \
-			| sort -u \
-	)" \
- && apk add --no-cache --virtual .rundeps $runDeps \
- && rm -rf /tmp/* && apk del --no-cache .build-deps
+ && make install; \
+ # clean
+ apt-mark auto '.*' > /dev/null; \
+	[ -z "$savedAptMark" ] || apt-mark manual $savedAptMark; \
+	find /usr/local -type f -executable -exec ldd '{}' ';' \
+		| awk '/=>/ { print $(NF-1) }' \
+		| sort -u \
+		| xargs -r dpkg-query --search \
+		| cut -d: -f1 \
+		| sort -u \
+		| xargs -r apt-mark manual \
+	; \
+ apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false; \
+ rm -rf /tmp/*; \
+ rm -r /var/lib/apt/lists/*;
 
 COPY configs/php /etc/php
 COPY configs/php/php-fpm.conf /usr/local/etc/
