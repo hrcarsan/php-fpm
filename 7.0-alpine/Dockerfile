@@ -7,6 +7,7 @@ RUN apk update --no-cache \
     openssl \
     openssl-dev \
     curl \
+    wget \
     g++ \
     libxml2-dev \
     bzip2-dev \
@@ -97,6 +98,9 @@ RUN apk update --no-cache \
 
 COPY configs/php /etc/php
 COPY configs/php/php-fpm.conf /usr/local/etc/
+
+RUN apk update --no-cache && apk add --no-cache wget
+RUN ln -s /usr/local/bin/php /bin/php
 
 EXPOSE 9000
 CMD ["php-fpm"]
