@@ -1,0 +1,22 @@
+#!/bin/bash
+
+binary=$1
+name=$(basename -- "$binary")
+
+apt install -y curl python2 zip
+
+ldd ${binary} > ${name}.ldd.out
+curl https://raw.githubusercontent.com/PerArneng/fortune/master/filefilter.py -o filefilter.py
+python2 filefilter.py ${name}.ldd.out > ${name}.file.lst
+echo ${binary} >> ${name}.file.lst
+cat ${name}.file.lst | zip -@ ${name}.zip
+mkdir ${name}_tmp
+cd ${name}_tmp
+unzip ../${name}.zip
+tar cvfz ../${name}.tar.gz *
+cd ..
+rm -rf filefilter.py ${name}_tmp ${name}.ldd.out ${name}.zip ${name}.file.lst
+echo ""
+echo "Output ${name}.tar.gz contents:"
+tar tvfz ${name}.tar.gz
+
