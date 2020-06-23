@@ -1,5 +1,5 @@
-# docker build -f Dockerfile.build -t hrcarsan/php-fpm:7.4.6-build .
-# docker run --rm -it hrcarsan/php-fpm:7.4.6-build bash
+# docker build -f Dockerfile.build -t hrcarsan/php-fpm:7.4.6-mq-build .
+# docker run --rm -it hrcarsan/php-fpm:7.4.6-mq-build bash
 FROM hrcarsan/ubuntu:20.04-mq
 LABEL maintainer="hrcarsan@gmail.com"
 
@@ -125,10 +125,10 @@ RUN cd /tmp \
   && make install \
   && echo "extension=grpc.so" >> /etc/php/fpm/php.ini
 
-COPY ./filefilter.py /
-COPY ./tar_binary /
-
-RUN chmod +x tar_binary \
+# =============== TAR BINARIES ============== #
+RUN  wget https://raw.githubusercontent.com/hrcarsan/dotfiles/master/filefilter.py \
+  && wget https://raw.githubusercontent.com/hrcarsan/dotfiles/master/tar_binary \
+  && chmod +x tar_binary \
   && ./tar_binary $(which php) "php -m" \
   && ./tar_binary $(which php-fpm) "php-fpm -m"
 

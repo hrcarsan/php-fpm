@@ -1,8 +1,8 @@
 # STEPS TO BUILD
-# docker run --rm -it --network host hrcarsan/php-fpm:7.4.6-build bash
+# docker run --rm -it --network host hrcarsan/php-fpm:7.4.6-mq-build bash
 # python3 -m http.server 8100 --bind 127.0.0.1
-# docker build --network host -t hrcarsan/php-fpm:7.4.6 .
-# docker run --rm -it hrcarsan/php-fpm:7.4.6 bash
+# docker build --network host -t hrcarsan/php-fpm:7.4.6-mq .
+# docker run --rm -it hrcarsan/php-fpm:7.4.6-mq bash
 FROM hrcarsan/ubuntu:20.04-mq
 LABEL maintainer="hrcarsan@gmail.com"
 
