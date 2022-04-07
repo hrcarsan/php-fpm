@@ -1,0 +1,105 @@
+# docker build -f Dockerfile.build -t hrcarsan/php-fpm:7.4.6-build .
+# docker run --rm -it hrcarsan/php-fpm:7.4.6-build bash
+FROM ubuntu:20.04
+LABEL maintainer="hrcarsan@gmail.com"
+
+# ================== INSTALL DEPENDENCIES ==================
+RUN export DEBIAN_FRONTEND=noninteractive \
+  && apt-get update -y \
+  && apt install -y --no-install-recommends \
+      curl wget zip git ca-certificates \
+      pkg-config g++ libxml++2.6-dev libsqlite3-dev make autoconf \
+      libbz2-dev libcurl4-gnutls-dev libpng-dev \
+      libjpeg-dev libfreetype6-dev libc-client-dev libkrb5-dev \
+      openssl libonig-dev libzip-dev libmcrypt-dev libssh2-1-dev \
+      libzmq3-dev libwebp-dev libxpm-dev
+
+# ================== INSTALl PHP ================== #
+RUN  export PHP_VERSION=7.4.6 \
+  && cd /tmp \
+  && curl -SL "http://php.net/get/php-$PHP_VERSION.tar.gz/from/this/mirror" \
+          -o php-$PHP_VERSION.tar.gz \
+  && tar -xzvf php-$PHP_VERSION.tar.gz \
+  && cd php-$PHP_VERSION \
+  && ./configure \
+    --disable-cgi \
+    --with-pear \
+    --with-bz2 \
+    --with-curl \
+    --enable-gd \
+    --with-freetype \
+    --with-jpeg \
+    --with-webp \
+    --with-pic \
+    --with-imap \
+    --with-imap-ssl \
+    --with-kerberos \
+    --enable-mbstring \
+    --enable-sockets \
+    --enable-mysqlnd \
+    --enable-opcache \
+    --with-mysqli \
+    --with-pdo-mysql \
+    --with-xmlrpc \
+    --with-zip \
+    --enable-soap \
+    --enable-pcntl \
+    --with-zlib \
+    --with-xpm \
+    --with-openssl \
+    --with-sodium \
+    --enable-fpm \
+    --with-fpm-user=www-data \
+    --with-fpm-group=www-data  \
+    --with-config-file-path=/etc/php/fpm \
+    --with-config-file-scan-dir=/etc/php/fpm/conf.d \
+  && make \
+  && make install \
+  && mkdir -p /etc/php/fpm \
+  && find /usr/local/bin /usr/local/sbin -type f -exec strip --strip-all '{}' + || true;
+
+# ================== INSTALL EXTENSION: timezonedb ================== #
+RUN  pecl install timezonedb \
+  && echo "extension=timezonedb.so" >> /etc/php/fpm/php.ini
+
+# ================== INSTALL EXTENSION: igbinary ================== #
+RUN  pecl install igbinary \
+  && echo "extension=igbinary.so" >> /etc/php/fpm/php.ini
+
+# ================== INSTALL EXTENSION: redis ================== #
+RUN  pecl install redis \
+  && echo "extension=redis.so" >> /etc/php/fpm/php.ini
+
+# ================== INSTALL EXTENSION: mcrypt ================== #
+RUN  pecl install mcrypt \
+  && echo "extension=mcrypt.so" >> /etc/php/fpm/php.ini
+
+# ================== INSTAL EXTENSION: opcache ================== #
+RUN echo "zend_extension=/usr/local/lib/php/extensions/no-debug-non-zts-20190902/opcache.so" \
+      >> /etc/php/fpm/php.ini
+
+# ================== INSTALL EXTENSION: ssh2 ================== #
+RUN  pecl install https://pecl.php.net/get/ssh2-1.2.tgz \
+  && echo "extension=ssh2.so" >> /etc/php/fpm/php.ini
+
+# ================== INSTALL COMPOSER ================== #
+RUN wget https://raw.githubusercontent.com/composer/getcomposer.org/ce43e63e47a7fca052628faf1e4b14f9100ae82c/web/installer -O - -q | php -- --quiet \
+ && cp composer.phar /bin/composer
+
+# ================== INSTALL PHPUNIT ================== #
+RUN wget -O phpunit https://phar.phpunit.de/phpunit-9.phar \
+ && chmod +x phpunit \
+ && cp phpunit /bin/phpunit
+
+# =============== TAR BINARIES ============== #
+RUN  wget https://raw.githubusercontent.com/hrcarsan/dotfiles/master/filefilter.py \
+  && wget https://raw.githubusercontent.com/hrcarsan/dotfiles/master/tar_binary \
+  && chmod +x tar_binary \
+  && ./tar_binary $(which php) "php -m" \
+  && ./tar_binary $(which php-fpm) "php-fpm -m" \
+  && ./tar_binary $(which wget) "wget --delete-after google.com"
+
+COPY configs/php /etc/php/fpm
+
+EXPOSE 9000
+CMD php-fpm -c /etc/php/fpm/php.ini -y /etc/php/fpm/php-fpm.conf
