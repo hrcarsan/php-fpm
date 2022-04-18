@@ -3,6 +3,7 @@
 # python3 -m http.server 8100 --bind 127.0.0.1
 # docker build --network host -t hrcarsan/php-fpm:7.4.6 .
 # docker run --rm -it hrcarsan/php-fpm:7.4.6 bash
+# docker push hrcarsan/php-fpm:7.4.6
 FROM ubuntu:20.04
 LABEL maintainer="hrcarsan@gmail.com"
 
@@ -29,6 +30,11 @@ RUN export DEBIAN_FRONTEND=noninteractive \
   && ln -s /usr/local/bin/php /bin/php
 
 COPY configs/php /etc/php/fpm
+
+RUN export DEBIAN_FRONTEND=noninteractive \
+  && apt-get update -y \
+  && apt install -y --no-install-recommends unzip \
+  && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 9000
 CMD php-fpm -c /etc/php/fpm/php.ini -y /etc/php/fpm/php-fpm.conf
